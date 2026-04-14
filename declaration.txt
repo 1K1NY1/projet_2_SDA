@@ -1,0 +1,26 @@
+Ne modifiez pas ce fichier (même cette ligne) sauf pour y ajouter vos réponses
+aux endroits marqués de "..."
+
+Règles concernant le plagiat:
+============================= 
+
+En soumettant votre projet et ce rapport, vous attestez que vous êtes les uniques auteurs 
+du code soumis et que vous avez respecté les régles en matière de plagiat relatives à ce 
+cours, précisées sur Ecampus (pas d'échange de codes entre groupes, pas d'appel à un tiers,
+pas d'utilisation d'outils d'intelligence artificielle tels que ChatGPT, Claude, Copilot, 
+etc.).
+
+Informations etudiants:
+=======================
+
+Etudiant 1:
+Matricule: ...
+Nom: ...
+Prénom: ...
+Contribution au projet: ... %
+
+Etudiant 2: (laissez vide si vous avez fait le projet seul)
+Matricule: ...
+Nom: ...
+Prénom: ...
+Contribution au projet: ... %
