@@ -214,13 +214,76 @@ static BNode *successor(BNode *n)
 
 BST *bstOptimalBuild(int comparison_fn_t(void *, void *), List *lkeys, List *lvalues)
 {
-    // To implement
+    // architecture d'un arbre de recherche dans la quelle c'est l'indice du millieu qui est 
+    //  la clé, ce qui nous permeet de trouver les indices de façon éfficace 
+    if (lkeys == NULL || listSize(lkeys) == 0) // si la 
     return NULL;
+
+    size_t ind_milieu = listSize(lkeys)/2;
+
+
+    //partie gauche 
+
+    List *lgauche_keys = listNew();
+    List *lgauche_values = listNew();
+
+    LNode *courant_k = lkeys ->head; 
+    LNode *courant_v = lvalues ->head; 
+
+    for (size_t i =0 ; i<ind_milieu;i++){
+        listInsertLast(lgauche_keys,courant_k->value);
+        listInsertLast(lgauche_values,courant_v->value);
+        courant_k = courant_k -> next;
+        courant_v = courant_v -> next;
+    }
+    void *key = courant_k->value;
+    void *value =  courant_v->value; 
+
+    //partie droit
+
+    List *ldroite_keys = listNew();
+    List *ldroite_values = listNew();
+
+    courant_k = courant_k ->next;
+    courant_v =  courant_v->next ;
+
+    for (size_t i =0 ; i<listSize(lkeys)-ind_milieu -1 ;i++){
+        listInsertLast(ldroite_keys,courant_k->value);
+        listInsertLast(ldroite_values,courant_v->value);
+        courant_k = courant_k -> next;
+        courant_v = courant_v -> next;
+    }
+
+    BST *bst = bstNew(comparison_fn_t);
+    bstInsert(bst , key ,value);
+
+
+    //récursive
+
+    BST *gauche = bstOptimalBuild(comparison_fn_t , lgauche_keys , lgauche_values);
+    BST *droite = bstOptimalBuild(comparison_fn_t, ldroite_keys ,ldroite_values);
+    
+
+    if (gauche != NULL)
+        bst->root->left = gauche->root;
+b   
+    if(droite != NULL)
+        bst->root->right = droite->root;
+
+
+    bstFree(gauche, false, false);
+    bstFree(droite, false, false);
+    listFree(lgauche_keys, false);
+    listFree(lgauche_values, false);
+    listFree(ldroite_keys, false);
+    listFree(ldroite_values, false);
+
+    return bst;
 }
 
 List *bstRangeSearch(BST *bst, void *keymin, void *keymax)
 {
-    // To implement
+    
     return NULL;
 }
 
