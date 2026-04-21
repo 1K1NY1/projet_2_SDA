@@ -214,7 +214,7 @@ static BNode *successor(BNode *n)
 
 BST *bstOptimalBuild(int comparison_fn_t(void *, void *), List *lkeys, List *lvalues)
 {
-    // architecture d'un arbre de recherche dans la quelle c'est l'indice du millieu qui est 
+    // architecture d'un arbre binaire de recherche dans la quelle c'est l'indice du millieu qui est 
     //  la clé, ce qui nous permeet de trouver les indices de façon éfficace 
     if (lkeys == NULL || listSize(lkeys) == 0) // si la 
     return NULL;
@@ -266,7 +266,7 @@ BST *bstOptimalBuild(int comparison_fn_t(void *, void *), List *lkeys, List *lva
 
     if (gauche != NULL)
         bst->root->left = gauche->root;
-b   
+   
     if(droite != NULL)
         bst->root->right = droite->root;
 
@@ -280,11 +280,41 @@ b
 
     return bst;
 }
+static void rangeSearchRec(BNode *noeud, BST *bst, void *keymin, void *keymax, List *result)
+{
+    if (noeud == NULL)
+        return;
+
+    int compmin = bst->compfn(noeud->key, keymin);
+    int compmax = bst->compfn(noeud->key, keymax);
+
+    if (compmin < 0)
+    {
+        rangeSearchRec(noeud->right, bst, keymin, keymax, result);
+    }
+    else if (compmax > 0)
+    {
+        rangeSearchRec(noeud->left, bst, keymin, keymax, result);
+    }
+    else
+    {
+        rangeSearchRec(noeud->left, bst, keymin, keymax, result);
+        listInsertLast(result, noeud->value);
+        rangeSearchRec(noeud->right, bst, keymin, keymax, result);
+    }
+}
 
 List *bstRangeSearch(BST *bst, void *keymin, void *keymax)
 {
-    
-    return NULL;
+    if (bst == NULL)
+        return NULL;
+
+    List *result = listNew();
+    if (result == NULL)
+        return NULL;
+
+    rangeSearchRec(bst->root, bst, keymin, keymax, result);
+    return result;
 }
 
 double bstAverageNodeDepth(BST *bst)
