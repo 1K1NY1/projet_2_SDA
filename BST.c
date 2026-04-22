@@ -60,6 +60,7 @@ BNode *bnNew(void *key, void *value)
     }
     n->left = NULL;
     n->right = NULL;
+    bn->parent = NULL;    
     n->key = key;
     n->value = value;
     return n;
@@ -118,7 +119,7 @@ static size_t bstHeightRec(BNode *root)
 
 size_t bstHeight(BST *bst)
 {
-    return bstHeightRec(bst->root);
+    return bstHeightRec(bst->root)-1;
 }
 
 bool bstInsert(BST *bst, void *key, void *value)
@@ -187,8 +188,7 @@ void *bstSearch(BST *bst, void *key)
     }
     return NULL;
 }
-
-static BNode *bnMin(BNode *n)
+/* static BNode *bnMin(BNode *n)
 {
     while (n->left != NULL)
         n = n->left;
@@ -207,7 +207,7 @@ static BNode *successor(BNode *n)
         y = y->parent;
     }
     return y;
-}
+ */
 
 // ----------------------------------------------------------------------------------
 // The functions below have to be implemented
