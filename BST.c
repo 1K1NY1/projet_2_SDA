@@ -60,7 +60,7 @@ BNode *bnNew(void *key, void *value)
     }
     n->left = NULL;
     n->right = NULL;
-    bn->parent = NULL;    
+    n->parent = NULL;    
     n->key = key;
     n->value = value;
     return n;
@@ -296,7 +296,7 @@ static void rangeSearchRec(BNode *noeud, BST *bst, void *keymin, void *keymax, L
     }
     else if (compmax > 0)
     {
-        rangeSearchRec(noeud->left, bst, keymin, keymax, result); // on va récursivement aller chercher du coté droit de l'arbre
+        rangeSearchRec(noeud->left, bst, keymin, keymax, result); // on va récursivement aller chercher du coté gauche de l'arbre
     }
     else
     { // on fait la même chose ici puisque l'on ne sais pas si les valeurs que l'on va chercher ici font automatiquement partie de la range 
@@ -319,8 +319,49 @@ List *bstRangeSearch(BST *bst, void *keymin, void *keymax)
     return result;
 }
 
+static double moyenne_prof(BNode *noeud, size_t profondeur_actuelle)
+{
+    if (noeud == NULL)
+        return 0.0;
+    
+    double somme = profondeur_actuelle;
+    somme += moyenne_prof(noeud->left, profondeur_actuelle + 1);
+    somme += moyenne_prof(noeud->right, profondeur_actuelle + 1);
+    
+    return somme;
+}
+/*
+
+ça prend la structure de parcours d'un noeud sur sa branche à gauche et à droite et enregistre la profondeur de ce noued et on ajoute au resultat finale de noeud le nombre de noeud qu'il y'a  
+static Pair moyenne_proff(BNode *noeud)
+{
+    if (noeud == NULL)
+        return (Pair){0, 0};
+    
+    Pair gauche = moyenne_proff(noeud->left);
+    Pair droite = moyenne_proff(noeud->right);
+    
+    Pair result;
+    result.n = gauche.n + droite.n + 1;
+    result.sum = gauche.sum + droite.sum + result.n - 1;
+    
+    return result;
+
+
+
+    double bstAverageNodeDepth(BST *bst)
+{
+    if (bst == NULL || bst->size == 0)
+        return 0.0;
+    Pair p = avgDepthRec2(bst->root);
+    return (double)p.sum / p.n;
+}
+}
+*/
+
 double bstAverageNodeDepth(BST *bst)
 {
-    // To implement
-    return 0.0;
+    if (bst == NULL || bst->size == 0)
+        return 0.0;
+    return moyenne_prof(bst->root, 0) / bst->size;
 }
