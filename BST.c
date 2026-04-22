@@ -214,9 +214,10 @@ static BNode *successor(BNode *n)
 
 BST *bstOptimalBuild(int comparison_fn_t(void *, void *), List *lkeys, List *lvalues)
 {
-    // architecture d'un arbre binaire de recherche dans la quelle c'est l'indice du millieu qui est 
-    //  la clé, ce qui nous permeet de trouver les indices de façon éfficace 
-    if (lkeys == NULL || listSize(lkeys) == 0) // si la 
+    /*
+    architecture en arbre binaire de recherche dans la quelle c'est l'indice du millieu qui est la clé, ce qui nous permeet de trouver les indices de façon éfficace de part et d'autre de l'arbre
+     */ 
+    if (lkeys == NULL || listSize(lkeys) == 0) // si la liste existe mais que sa taille est nulle ça sert à rien 
     return NULL;
 
     size_t ind_milieu = listSize(lkeys)/2;
@@ -270,6 +271,7 @@ BST *bstOptimalBuild(int comparison_fn_t(void *, void *), List *lkeys, List *lva
     if(droite != NULL)
         bst->root->right = droite->root;
 
+    // on libère tout les listes qu'on a crée 
 
     bstFree(gauche, false, false);
     bstFree(droite, false, false);
@@ -285,21 +287,21 @@ static void rangeSearchRec(BNode *noeud, BST *bst, void *keymin, void *keymax, L
     if (noeud == NULL)
         return;
 
-    int compmin = bst->compfn(noeud->key, keymin);
-    int compmax = bst->compfn(noeud->key, keymax);
+    int compmin = bst->compfn(noeud->key, keymin); // on compare la clé à keymin
+    int compmax = bst->compfn(noeud->key, keymax); // même chose
 
     if (compmin < 0)
     {
-        rangeSearchRec(noeud->right, bst, keymin, keymax, result);
+        rangeSearchRec(noeud->right, bst, keymin, keymax, result); // on va récursivement aller chercher du coté droit de l'arbre
     }
     else if (compmax > 0)
     {
-        rangeSearchRec(noeud->left, bst, keymin, keymax, result);
+        rangeSearchRec(noeud->left, bst, keymin, keymax, result); // on va récursivement aller chercher du coté droit de l'arbre
     }
     else
-    {
+    { // on fait la même chose ici puisque l'on ne sais pas si les valeurs que l'on va chercher ici font automatiquement partie de la range 
         rangeSearchRec(noeud->left, bst, keymin, keymax, result);
-        listInsertLast(result, noeud->value);
+        listInsertLast(result, noeud->value); // on met les valeurs que l'on a trouve dans la liste result 
         rangeSearchRec(noeud->right, bst, keymin, keymax, result);
     }
 }
