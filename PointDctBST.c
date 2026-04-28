@@ -4,6 +4,10 @@
 #include <stdlib.h>
 #include <stdint.h>
 
+typedef struct {
+    uint64_t key;
+    void *value;
+} Pair;
 
 static uint64_t interleave8(uint8_t m, uint8_t n) {
     return (
@@ -21,15 +25,30 @@ static uint64_t zEncode(uint32_t x, uint32_t y) {
     return out;
 }
 
-
 static int comparePair(const void *a, const void *b);
 static int compareUint64(void *a, void *b);
+
+// Fonctions de comparaison 
+static int compare_pair(const void *a, const void *b) {
+    Pair *pa = (Pair*)a;
+    Pair *pb = (Pair*)b;
+    if (pa->key < pb->key) return -1;
+    if (pa->key > pb->key) return 1;
+    return 0;
+}
+
+static int compare_uint64(void *a, void *b) {
+    uint64_t ua = *(uint64_t*)a;
+    uint64_t ub = *(uint64_t*)b;
+    if (ua < ub) return -1;
+    if (ua > ub) return 1;
+    return 0;
+}
 
 typedef struct PointDct_t {
     BST *arbre;
     double xmin, xmax, ymin, ymax;
 } PointDct;
-
 
 PointDct* pdctCreate(List *lpoints, List *lvalues) {
     // Vérification
@@ -110,13 +129,9 @@ PointDct* pdctCreate(List *lpoints, List *lvalues) {
         curr = curr->next;
         currVal = currVal->next;
     }
+    
     size_t n = listSize(key_temp);
-    
-    typedef struct {
-        uint64_t key;
-        void *value;
-    } Pair;
-    
+
     Pair *pairs = malloc(n * sizeof(Pair));
     if (pairs == NULL) {
         listFree(key_temp, true);
@@ -135,16 +150,7 @@ PointDct* pdctCreate(List *lpoints, List *lvalues) {
         vnode = vnode->next;
     }
     
-    static int compare_pair(const void *a, const void *b){
-        Pair *pa = (Pair*)a;
-        Pair *pb = (Pair*)b;
-        if (pa->key < pb->key) return -1;
-        if (pa->key > pb->key) return 1;
-        return 0;
-    }
-    
     qsort(pairs, n, sizeof(Pair), compare_pair);
-    
     
     listFree(key_temp, true);   // libère les anciennes clés
     listFree(value_temp, false); // ne libère pas les valeurs
@@ -171,15 +177,6 @@ PointDct* pdctCreate(List *lpoints, List *lvalues) {
         listInsertLast(value_temp, pairs[i].value);
     }
     free(pairs);
-
-    // Fonction de comparaison pour clés uint64_t (à mettre en haut)
-    static int compare_uint64(void *a, void *b) {
-        uint64_t ua = *(uint64_t*)a;
-        uint64_t ub = *(uint64_t*)b;
-        if (ua < ub) return -1;
-        if (ua > ub) return 1;
-        return 0;
-    }
     
     // CONSTRUIRE l'arbre optimal
     pdct->arbre = bstOptimalBuild(compare_uint64, key_temp, value_temp);
@@ -192,6 +189,7 @@ PointDct* pdctCreate(List *lpoints, List *lvalues) {
     
     return pdct;
 }
+
 void pdctFree(PointDct *pd) {
     if (pd == NULL) return;
     if (pd->arbre != NULL) {
@@ -200,24 +198,20 @@ void pdctFree(PointDct *pd) {
     free(pd);
 }
 
-
 size_t pdctSize(PointDct *pd) {
     if (pd == NULL || pd->arbre == NULL) return 0;
     return bstSize(pd->arbre);
 }
-
 
 size_t pdctHeight(PointDct *pd) {
     if (pd == NULL || pd->arbre == NULL) return 0;
     return bstHeight(pd->arbre);
 }
 
-
 size_t pdctAverageNodeDepth(PointDct *pd) {
     if (pd == NULL || pd->arbre == NULL) return 0;
     return (size_t)bstAverageNodeDepth(pd->arbre);
 }
-
 
 void *pdctExactSearch(PointDct *pd, Point *p) {
     if (pd == NULL || pd->arbre == NULL || p == NULL) return NULL;
@@ -243,13 +237,48 @@ void *pdctExactSearch(PointDct *pd, Point *p) {
     return bstSearch(pd->arbre, &key_temp);
 }
 
-
 List *pdctBallSearch(PointDct *pd, Point *q, double r) {
-    // Cette fonction est plus complexe car un rayon en 2D ne correspond pas
-    // à un simple intervalle en code de Morton.
-    // Pour l'instant, on retourne NULL (à implémenter)
-    (void)pd;
-    (void)q;
-    (void)r;
-    return NULL;
+    if (pd == NULL || pd->arbre == NULL || q == NULL || r < 0) {
+        return NULL;
+    }
+    
+    List *result = listNew();
+    if (result == NULL) {
+        return NULL;
+    }
+    
+    // Parcourir TOUS les points via un parcours infixe de l'arbre
+    BST_t *node = bstMin(pd->arbre);
+    while (node != NULL) {
+        // Décoder la clé Morton pour obtenir les coordonnées normalisées
+        uint64_t key = *(uint64_t*)node->key;
+        
+        // Extraction simple de X et Y du code Morton
+        uint32_t x = 0, y = 0;
+        for (int i = 0; i < 32; i++) {
+            x |= ((key >> (2*i)) & 1) << i;
+            y |= ((key >> (2*i + 1)) & 1) << i;
+        }
+        
+        // Reconvertir en coordonnées réelles
+        double x_real = pd->xmin + (double)x / (double)UINT32_MAX * (pd->xmax - pd->xmin);
+        double y_real = pd->ymin + (double)y / (double)UINT32_MAX * (pd->ymax - pd->ymin);
+        
+        // Vérifier si le point est dans le cercle
+        double dx = x_real - ptGetx(q);
+        double dy = y_real - ptGety(q);
+        
+        if (dx*dx + dy*dy <= r*r) {
+            listInsertLast(result, node->value);
+        }
+        
+        node = bstSuccessor(pd->arbre, node->key);
+    }
+    
+    if (listSize(result) == 0) {
+        listFree(result, false);
+        return NULL;
+    }
+    
+    return result;
 }
