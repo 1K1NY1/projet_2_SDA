@@ -7,7 +7,7 @@
 
 //Code pour arbre de recherche 2d (tout devra être static à terme)
 typedef struct BNode2d_t BNode2d;
-typedef struct BNode2d_t {
+struct BNode2d_t {
 
     BNode2d *parent;
     BNode2d *left;
@@ -164,26 +164,98 @@ typedef struct //structure pour optimiser la recherche.
     size_t index; //position dans le tableau de status
 }ListPoint;
 
+//Type array
+typedef struct
+{
+    ListPoint** list;
+    size_t length;
+}Array;
+
+//Copie un array à partir d'un autre (de start à end compris), mets à jour statut
+Array* newArrayFromArray(size_t start, size_t end, Array* arr, Array** status)
+{
+    Array* res = malloc(sizeof(Array));
+    if(!res)
+    {
+        fprintf(stderr, "erreur d'allocation pour Array");
+        return NULL;
+    }
+    size_t size = end - start + 1; //Contient end
+    ListPoint** l = malloc(sizeof(ListPoint*)*size);
+    if(!l)
+    {
+        fprintf(stderr, "erreur d'allocation pour Array");
+        return NULL;
+    }
+    for(size_t i = 0; i < size; i++)
+    {
+        l[i] = arr->list[start + i];
+        status[arr->list[start + i]->index] = res;
+    }
+    res->list = l;
+    res->length = size;
+    return res;
+}
+//cree un array de meme taille que arr
+Array* newArrayAs(Array* arr)
+{
+    size_t size = arr->length;
+    Array* res = malloc(sizeof(Array));
+    if(!res)
+    {
+        fprintf(stderr, "erreur d'allocation pour Array");
+        return NULL;
+    }
+    ListPoint** l = malloc(sizeof(ListPoint*)*size);
+    if(!l)
+    {
+        fprintf(stderr, "erreur d'allocation pour Array");
+        return NULL;
+    }
+    res->list = l;
+    res->length = size;
+    return res;
+}
+//cree un array de taille length à partir d'une liste de ListPoint
+Array* newArrayFromListPoint(ListPoint** list, size_t length, bool update, Array** status)
+{
+    Array* res = malloc(sizeof(Array));
+    if(!res)
+    {
+        fprintf(stderr, "erreur d'allocation pour Array");
+        return NULL;
+    }
+    ListPoint** l = malloc(sizeof(ListPoint*)*length);
+    if(!l)
+    {
+        fprintf(stderr, "erreur d'allocation pour Array");
+        return NULL;
+    }
+    for(size_t i = 0; i < length; i++)
+    {
+        l[i] = list[i];
+        if(update)
+            status[list[i]->index] = res;
+    }
+    res->list = l;
+    res->length = length;
+    return res;
+}
+void freeArray(Array* arr)
+{
+    free(arr->list);
+    free(arr);
+    return;
+}
+
 PointDct *pdctCreate(List *lpoints, List *Lvalues)
 {
     //On crée deux listes liées triées selon x et y. On crée des listes de plus en plus petite en séparant la liste
     //Stockage du status des éléments
-    List** status = malloc(sizeof(List*)*listSize(lpoints));
+    Array** status = malloc(sizeof(List*)*listSize(lpoints));
     if(!status)
     {
         fprintf(stderr, "erreur de malloc: status");
-        return NULL;
-    }
-    List* listX = listNew();
-    if(!listX)
-    {
-        fprintf(stderr, "erreur listX");
-        return NULL;
-    }
-    List* listY = listNew();
-    if(!listY)
-    {
-        fprintf(stderr, "erreur listY");
         return NULL;
     }
     //Transforme lpoints/Lvalues en array pour qsort
@@ -199,7 +271,8 @@ PointDct *pdctCreate(List *lpoints, List *Lvalues)
         fprintf(stderr, "erreur d'alocation: arrayLPoint");
         return NULL;
     }
-    //remplissage de arrayPoint
+
+    //remplissage de arrayLPoint
     LNode* n = lpoints->head;
     LNode* m = Lvalues->head;
     size_t i = 0;
@@ -214,24 +287,29 @@ PointDct *pdctCreate(List *lpoints, List *Lvalues)
         lp->index = i;
         lp->point = n->value;
         lp->value = m->value;
+        arrayLPoint[i] = lp;
         i++;
         n = n->next;
         m = m->next;
     }
-    //Tri selon X (et remplissage)
-    sort(arrayLPoint,nbOfPoints,true,compareByIndex,swap);
-    for(int x = 0; x < nbOfPoints; x++)
-    {
-        listInsertLast(listX, arrayLPoint[x]);
-    }
-    //Tri selon Y (et remplissage)
-    sort(arrayLPoint,nbOfPoints,false,compareByIndex,swap);
-    for(int x = 0; x < nbOfPoints; x++)
-    {
-        listInsertLast(listY, arrayLPoint[x]);
-    }
-    free(arrayLPoint);
 
+    //tri par X
+    sort(arrayLPoint,nbOfPoints,true,compareByIndex,swap);
+    Array* listX = newArrayFromListPoint(arrayLPoint,nbOfPoints,true,status);
+    if(!listX)
+    {
+        fprintf(stderr, "erreur listX");
+        return NULL;
+    }
+    //tri par Y
+    sort(arrayLPoint,nbOfPoints,false,compareByIndex,swap);
+    Array* listY = newArrayFromListPoint(arrayLPoint,nbOfPoints,false,status);
+    if(!listY)
+    {
+        fprintf(stderr, "erreur listY");
+        return NULL;
+    }
+    
     BST2d* emptyTree = bst2dNew();
     PointDct* pd = malloc(sizeof(PointDct));
     if(!pd)
@@ -241,13 +319,23 @@ PointDct *pdctCreate(List *lpoints, List *Lvalues)
     }
     pd->nbOfPoints = 0;
     BNode2d* root = createBst2dRec(emptyTree,NULL,listX,listY,status,0);
+    if(!root)
+    {
+        fprintf(stderr, "echec de la creation de l'arbre");
+        return NULL;
+    }
     emptyTree->root = root;
     pd->tree = emptyTree;
     pd->nbOfPoints = emptyTree->size;
     //Les noeuds de la liste sont vides
-    free(listX);
-    free(listY);
-    fee(arrayLPoint);
+    //Libère les listPoints
+    for(size_t ind = 0; ind < nbOfPoints; ind++)
+    {
+        free(arrayLPoint[ind]);
+    }
+    //libère les arrays
+    freeArray(listX);
+    freeArray(listY);
     return pd;
 }
 //QuickSort
@@ -279,8 +367,8 @@ void swap(ListPoint** tab, size_t i, size_t j)
 }
 
 static size_t partition(ListPoint** tab, size_t p, size_t r, bool Xsort,
-                        int (*compare)(Point**, size_t i, size_t j, bool),
-                        void (*swap)(Point** tableau, size_t i, size_t j))
+                        int (*compare)(ListPoint**, size_t i, size_t j, bool),
+                        void (*swap)(ListPoint** tableau, size_t i, size_t j))
 {
     size_t i,j;
     i = p;
@@ -297,9 +385,9 @@ static size_t partition(ListPoint** tab, size_t p, size_t r, bool Xsort,
     return i;
 }
 
-static void QuickSort( Point** tab, size_t p , size_t r,bool Xsort,
-                int (*compare)(Point**, size_t i, size_t j, bool Xsort),
-                void (*swap)(Point** tableau, size_t i, size_t j))
+static void QuickSort( ListPoint** tab, size_t p , size_t r,bool Xsort,
+                int (*compare)(ListPoint**, size_t i, size_t j, bool Xsort),
+                void (*swap)(ListPoint** tableau, size_t i, size_t j))
 {
    size_t q;
    if (p < r && r != (size_t)-1)
@@ -311,9 +399,9 @@ static void QuickSort( Point** tab, size_t p , size_t r,bool Xsort,
    }
 }
 
-static void sort(Point** tableau, size_t length, bool Xsort,
-          int (*compare)(Point**, size_t i, size_t j, bool Xsort),
-          void (*swap)(Point** tableau, size_t i, size_t j)) 
+static void sort(ListPoint** tableau, size_t length, bool Xsort,
+          int (*compare)(ListPoint**, size_t i, size_t j, bool Xsort),
+          void (*swap)(ListPoint** tableau, size_t i, size_t j)) 
 {
     //Quicksort
     if (length < 2) //tableau trop petit
@@ -347,151 +435,110 @@ static bool bst2dInsert(BST2d* tree, BNode2d* n, bool left , void *key, void *va
 /*
 Construit la structure PointDct de maniere optimale (recursion)
 */
-static BNode2d* createBst2dRec(BST2d* tree, BNode2d* previousNode,List* splitList, List* otherList, List** status, size_t profondeur)
+static BNode2d* createBst2dRec(BST2d* tree, BNode2d* previousNode,Array* splitList, Array* otherList, Array** status, size_t profondeur)
 {
     //tableau de taille 1,2 ou 3
-    if(splitList->size == 1)
+    if(splitList->length == 1)
     {
-        BNode2d* node = bn2dNew(((ListPoint*)((splitList->last)->value))->point,((ListPoint*)((splitList->last)->value))->value,profondeur);
+        BNode2d* node = bn2dNew(splitList->list[0]->point,splitList->list[0]->value,profondeur);
         node->parent = previousNode;
         node->left = NULL;
         node->right = NULL;
-        //Une fois le noeud utilise on nettoie le noeud
-        free(splitList->last->value); //Free listPoint
-        free(splitList->last); //Free LNode
+        freeArray(splitList);
+        freeArray(otherList);
         return node;
     }
-    if(splitList->size == 2)
+    if(splitList->length == 2)
     {
         // a securiser si necessaire
-        BNode2d* node = bn2dNew(((ListPoint*)((splitList->last)->value))->point,((ListPoint*)((splitList->last)->value))->value,profondeur);
+        BNode2d* node = bn2dNew(splitList->list[1]->point,splitList->list[1]->value,profondeur);
         node->parent = previousNode;
-        node->left = bn2dNew(((ListPoint*)((splitList->head)->value))->point,((ListPoint*)((splitList->head)->value))->value,profondeur + 1);
+        node->left = bn2dNew(splitList->list[0]->point,splitList->list[0]->value,profondeur + 1);
         node->right = NULL;
 
-        //Une fois le noeud utilise on nettoie le noeud
-        free(splitList->last->value); //Free listPoint
-        free(splitList->head->value);
-        free(splitList->head); //Free LNode
-        free(splitList->last);
+        freeArray(splitList);
+        freeArray(otherList);
         return node;
     }
-    if(splitList->size == 3)
+    if(splitList->length == 3)
     {
-        BNode2d* node = bn2dNew(((ListPoint*)((splitList->head->next)->value))->point,((ListPoint*)((splitList->head->next)->value))->value,profondeur);
+        BNode2d* node = bn2dNew(splitList->list[1]->point,splitList->list[1]->value,profondeur);
         node->parent = previousNode;
-        node->left = bn2dNew(((ListPoint*)((splitList->head)->value))->point,((ListPoint*)((splitList->head)->value))->value,profondeur + 1);
-        node->right = bn2dNew(((ListPoint*)((splitList->last)->value))->point,((ListPoint*)((splitList->last)->value))->value,profondeur + 1);
+        node->left = bn2dNew(splitList->list[0]->point,splitList->list[0]->value,profondeur + 1);
+        node->right = bn2dNew(splitList->list[2]->point,splitList->list[2]->value,profondeur + 1);
 
-        //Une fois le noeud utilise on nettoie le noeud
-        free(splitList->head->next->value); //Free listPoint
-        free(splitList->head->value);
-        free(splitList->head->value);
-        free(splitList->head->next); //Free LNode
-        free(splitList->head);
-        free(splitList->last);
+        freeArray(splitList);
+        freeArray(otherList);
         return node;
     }
 
     //Separe en deux
-    size_t size = splitList->size;
+    size_t size = splitList->length;
     size_t i = 0;
-    LNode* n = splitList->head;
+    
 
-    List* splitListLeft = listNew();
+    Array* splitListLeft = newArrayFromArray(0,size/2-1,splitList, status);
     if(!splitListLeft)
         return NULL;
-    List* splitListRight = listNew();
+    Array* splitListRight = newArrayFromArray(size/2 + 1,size-1,splitList, status);
     if(!splitListRight)
         return NULL;
 
-    LNode* prev = n;
-    while(i < size/2) //La premiere partie va dans splitListLeft
-    {
-        status[((ListPoint*)n->value)->index] = splitListLeft;
-        prev = n;
-        n = n->next;
-        i++;
-    }
-    //seconde boucle pour mettre a jour status
-    LNode* p = n->next;
-    while(p)
-    {
-        status[((ListPoint*)p->value)->index] = splitListRight;
-        p = p->next;
-    }
-    status[((ListPoint*)n->value)->index] = NULL; 
-
-
-    splitListLeft->head = splitList->head;
-    
-    //met a jour splitListRight
-    splitListRight->head = n->next;
-    splitListRight->last = splitList->last;
-    splitListRight->size = splitList->size - (i + 1);
-
-    //ferme splitListLeft
-    prev->next = NULL;
-    splitListLeft->last = prev;
-    splitListLeft->size = i + 1;
+    ListPoint* n = splitList->list[size/2];
+    status[n->index] = NULL; 
 
     //cree les listes Y1 et Y2
-    List* otherList1 = listNew();
+    Array* otherList1 = newArrayAs(splitListLeft);
     if(!otherList1)
     {
         fprintf(stderr,"echec de creation de liste");
         return NULL;
     } 
-    List* otherList2 = listNew();
+    List* otherList2 = newArrayAs(splitListRight);
     if(!otherList2)
     {
         fprintf(stderr,"echec de creation de liste");
         return NULL;
     }
-    LNode* m = otherList->head;
-    while(m) 
+    
+    //remplis otherList1 et otherList2;
+
+    for(size_t x,y,j = 0; j < otherList->length; j++) 
     {
-        if(status[((ListPoint*)m->value)->index] == splitListLeft) //le noeud m est dans la nouvelle liste gauche
+        if(status[otherList->list[j]->index] == splitListLeft) //le noeud m est dans la nouvelle liste gauche
         {
-            listInsertLast(otherList1,m->value);
+            otherList1->list[x++] = otherList->list[j];
         }
-        else if(status[((ListPoint*)m->value)->index] == splitListRight) //evite n
+        else if(status[otherList->list[j]->index] == splitListRight) //evite n
         {
-            listInsertLast(otherList2,m->value);
+            otherList1->list[y++] = otherList->list[j];
         }
-        m = m->next;
     } 
 
+    //On libère les Array précédent car des copies en ont été fait (aucun code ne l'utilise a nouveau)
+    freeArray(splitList);
+    free(otherList);
     //Recursion
     //On insere n dans l'arbre
     //Inverse le tableau qui est coupe a chaque nouvelle recursion x->y->x->y...
-    BNode2d* node = bn2dNew(((ListPoint*)n->value)->point,((ListPoint*)n->value)->value,profondeur);
+    BNode2d* node = bn2dNew(n->point,n->value,profondeur);
     node->parent = previousNode;
     node->left = createBst2dRec(tree,node,otherList1,splitListLeft,status,profondeur + 1);
     node->right = createBst2dRec(tree,node,otherList2,splitListRight, status, profondeur + 1);
     
-    
-   //une seule version des noeuds, on efface a la fin de la fonction. On doit donc uniquement effacer la structure et non les noeuds
-    free(otherList1);
-    free(otherList2);
-    free(splitListLeft);
-    free(splitListRight);
-    free(n->value); //libere ListPoint
-    free(n); //libère le noeud
-
     return node;
 }
 
 
 void *pdctExactSearch(PointDct *pd, Point *p) 
 {
-    //A changer si on veut retirer la profondeur.
     return bst2dSearch(pd->tree, p);
 }
 
 void pdctFree(PointDct *pd)
 {
-    (void*)pd;
+    bst2dFree(pd->tree,false,false);
+    free(pd);
     return;
 }
 size_t pdctSize(PointDct *pd)
@@ -500,11 +547,12 @@ size_t pdctSize(PointDct *pd)
 }
 size_t pdctAverageNodeDepth(PointDct *pd)
 {
+    
     return pd->nbOfPoints;
 }
 size_t pdctHeight(PointDct *pd)
 {
-    return pd->nbOfPoints;
+    return bst2dHeight(pd->tree);
 }
 List *pdctBallSearch(PointDct *pd, Point *p, double r)
 {
