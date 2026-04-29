@@ -26,6 +26,8 @@ typedef struct
 typedef struct PointDct_t {
     BST2d* tree;
     size_t nbOfPoints;
+    List* ListPoint;
+    List* ListValue;
 } PointDct;
 
 static BNode2d *bn2dNew(void *key, void *value, size_t profondeur)
@@ -155,6 +157,19 @@ static void *bst2dSearch(BST2d *bst, void *key)
     }
     return NULL;
 }
+static size_t sumOfDepth(BST2d* bst)
+{
+    if(!bst || !bst->root)
+        return 0;
+    return (sumOfDepthRec(bst->root->left) + sumOfDepthRec(bst->root->right));
+}
+
+static size_t sumOfDepthRec(BNode2d* n)
+{
+    if(!n)
+        return 0;
+    return sumOfDepth(n->left) + sumOfDepth(n->right) + n->profondeur;
+}
 
 //Code pour PointDct
 typedef struct //structure pour optimiser la recherche.
@@ -196,6 +211,7 @@ Array* newArrayFromArray(size_t start, size_t end, Array* arr, Array** status)
     res->length = size;
     return res;
 }
+
 //cree un array de meme taille que arr
 Array* newArrayAs(Array* arr)
 {
@@ -327,6 +343,8 @@ PointDct *pdctCreate(List *lpoints, List *Lvalues)
     emptyTree->root = root;
     pd->tree = emptyTree;
     pd->nbOfPoints = emptyTree->size;
+    pd->ListPoint = lpoints;
+    pd->ListValue = Lvalues;
     //Les noeuds de la liste sont vides
     //Libère les listPoints
     for(size_t ind = 0; ind < nbOfPoints; ind++)
@@ -336,6 +354,7 @@ PointDct *pdctCreate(List *lpoints, List *Lvalues)
     //libère les arrays
     freeArray(listX);
     freeArray(listY);
+    freeArray(arrayLPoint);
     return pd;
 }
 //QuickSort
@@ -515,7 +534,7 @@ static BNode2d* createBst2dRec(BST2d* tree, BNode2d* previousNode,Array* splitLi
         }
     } 
 
-    //On libère les Array précédent car des copies en ont été fait (aucun code ne l'utilise a nouveau)
+    //On libère les Array précédent car des copies en ont été faites (aucun code ne l'utilise a nouveau)
     freeArray(splitList);
     free(otherList);
     //Recursion
@@ -547,8 +566,11 @@ size_t pdctSize(PointDct *pd)
 }
 size_t pdctAverageNodeDepth(PointDct *pd)
 {
-    
-    return pd->nbOfPoints;
+    if(!pd)
+        return 0;
+    size_t sum = sumOfDepth(pd->tree);
+    size_t average = sum/pd->nbOfPoints;
+    return average;
 }
 size_t pdctHeight(PointDct *pd)
 {
@@ -556,8 +578,53 @@ size_t pdctHeight(PointDct *pd)
 }
 List *pdctBallSearch(PointDct *pd, Point *p, double r)
 {
-    (void)pd;
-    (void)p;
-    (double)r;
-    return NULL;
+    List* result = listNew();
+    if(!result)
+    {
+        fprintf(stderr, "echec d'allocation de liste");
+        return NULL;
+    }
+    if(!ballSearchRec(result, pd->tree->root,p,r))
+    {
+        fprintf(stderr, "echec durant la recursion de ballSearch");
+        return NULL;
+    }
+    return result;
+}
+
+bool ballSearchRec(List* result, BNode2d* n, Point *p, double r)
+{
+    if(!n)
+        return;
+    
+    size_t profondeur = n->profondeur;
+    if(ptSqrDistance(n->key,p) <= r*r) //le point fait partie de la boule
+    {
+        if(!listInsertLast(result,n->key)) //ajoute la position a la liste
+            return false;
+        return true;
+    }
+    //choix du parcours
+    double v_n, v_p;
+    if(profondeur % 2) //impair (y)
+    {
+        v_n = ptGety(n->key);
+        v_p = ptGety(p);
+    }
+    else //pair (x)
+    {
+        v_n = ptGetx(n->key);
+        v_p = ptGetx(p);
+    }
+    if(v_p - r < v_n) //on explore le sous-arbre de gauche
+    {
+        if(!ballSearchRec(result,n->left,p,r))
+            return false;
+    }
+    if(v_p + r >= v_n) //on explore le sous-arbre de droite
+    {
+        if(!ballSearchRec(result,n->right,p,r))
+            return false;
+    }
+    return true;
 }
