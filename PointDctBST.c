@@ -6,27 +6,26 @@
 #include <stdint.h>
 #include <stdio.h>
 
-// pour pouvoir l'utiliser dans pdctBallsearch
-//devra être static 
-typedef struct BNode_t {
-    struct BNode_t *parent;
-    struct BNode_t *left;
-    struct BNode_t *right;
-    void *key;
-    void *value;
-} BNode;
+struct PointDct_t {
+    BST *arbre;
+    double xmin, xmax, ymin, ymax;
+};
 
-// Définir la structure de l'arbre comme dans BST.c
-typedef struct BST_t {
-    BNode *root;
-    size_t size;
-    int (*compfn)(void *, void *);
-} BST;
+typedef struct {
+    Point *pt;
+    void *value;
+} PointValue;
 
 typedef struct {
     uint64_t key;
     void *value;
 } Pair;
+
+//declarations
+static uint64_t interleave8(uint8_t m, uint8_t n);
+static uint64_t zEncode(uint32_t x, uint32_t y);
+static int compare_pair(const void *a, const void *b);
+static int compare_uint64(void *a, void *b);
 
 static uint64_t interleave8(uint8_t m, uint8_t n) {
     return (
@@ -44,8 +43,7 @@ static uint64_t zEncode(uint32_t x, uint32_t y) {
     return out;
 }
 
-static int comparePair(const void *a, const void *b);
-static int compareUint64(void *a, void *b);
+
 
 // Fonctions de comparaison 
 static int compare_pair(const void *a, const void *b) {
@@ -64,47 +62,29 @@ static int compare_uint64(void *a, void *b) {
     return 0;
 }
 
-typedef struct PointDct_t {
-    BST *arbre;
-    double xmin, xmax, ymin, ymax;
-} PointDct;
 
 PointDct* pdctCreate(List *lpoints, List *lvalues) {
-    printf("pdctCreate: debut\n");
-    fflush(stdout);
-    
     // Vérification
     if (lpoints == NULL || listSize(lpoints) == 0) {
-        printf("pdctCreate: lpoints NULL ou vide\n");
-        fflush(stdout);
         return NULL;
     }
-    
-    printf("pdctCreate: taille lpoints = %zu\n", listSize(lpoints));
-    fflush(stdout);
-    
+
     // Allocation de la structure
     PointDct *pdct = malloc(sizeof(PointDct));
     if (pdct == NULL) {
-        printf("pdctCreate: malloc failed\n");
-        fflush(stdout);
         return NULL;
     }
     pdct->arbre = NULL;
-    
+
     // Calcul des bornes avec le premier point
     LNode *curr = lpoints->head;
     if (curr == NULL) {
-        printf("pdctCreate: curr NULL\n");
-        fflush(stdout);
         free(pdct);
         return NULL;
     }
-    
+
     Point *p = (Point*)curr->value;
-    printf("pdctCreate: premier point (%f,%f)\n", ptGetx(p), ptGety(p));
-    fflush(stdout);
-    
+
     pdct->xmin = pdct->xmax = ptGetx(p);
     pdct->ymin = pdct->ymax = ptGety(p);
     curr = curr->next;
@@ -122,90 +102,84 @@ PointDct* pdctCreate(List *lpoints, List *lvalues) {
         
         curr = curr->next;
     }
-    
-    printf("pdctCreate: bornes x=[%f,%f] y=[%f,%f]\n", pdct->xmin, pdct->xmax, pdct->ymin, pdct->ymax);
-    fflush(stdout);
-    
+
     // Création des listes temporaires
     List *key_temp = listNew();
     List *value_temp = listNew();
-    
+
     if (key_temp == NULL || value_temp == NULL) {
-        printf("pdctCreate: key_temp ou value_temp NULL\n");
-        fflush(stdout);
         if (key_temp) listFree(key_temp, false);
         if (value_temp) listFree(value_temp, false);
         free(pdct);
         return NULL;
     }
-    
+
     // Normalisation et encodage de chaque point
     curr = lpoints->head;
     LNode *currVal = lvalues->head;
-    
+
     if (currVal == NULL) {
-        printf("pdctCreate: currVal NULL\n");
-        fflush(stdout);
         listFree(key_temp, true);
         listFree(value_temp, false);
         free(pdct);
         return NULL;
     }
-    
-    int count = 0;
+
     while (curr != NULL) {
-        count++;
-        if (count % 100 == 0) printf("pdctCreate: traitement point %d\n", count);
-        
         p = (Point*)curr->value;
-        
+
         // Normalisation
         double x_norm = (ptGetx(p) - pdct->xmin) / (pdct->xmax - pdct->xmin);
         double y_norm = (ptGety(p) - pdct->ymin) / (pdct->ymax - pdct->ymin);
-        
+
         // Conversion en uint32_t
         uint32_t X = (uint32_t)(x_norm * (double)UINT32_MAX);
         uint32_t Y = (uint32_t)(y_norm * (double)UINT32_MAX);
-        
+
         // Encodage Morton
         uint64_t z = zEncode(X, Y);
-        
+
         // Stockage de la clé
         uint64_t *keyPtr = malloc(sizeof(uint64_t));
         if (keyPtr == NULL) {
-            printf("pdctCreate: malloc keyPtr failed\n");
-            fflush(stdout);
+            fprintf(stderr,"pdctCreate: malloc keyPtr failed\n");
             listFree(key_temp, true);
             listFree(value_temp, false);
             free(pdct);
             return NULL;
         }
         *keyPtr = z;
-        
+
+        // On enrobe le Point et la valeur utilisateur dans un PointValue
+        // pour pouvoir retrouver la position lors des recherches.
+        PointValue *pv = malloc(sizeof(PointValue));
+        if (pv == NULL) {
+            free(keyPtr);
+            listFree(key_temp, true);
+            listFree(value_temp, true);
+            free(pdct);
+            return NULL;
+        }
+        pv->pt = p;
+        pv->value = currVal->value;
+
         listInsertLast(key_temp, keyPtr);
-        listInsertLast(value_temp, currVal->value);
-        
+        listInsertLast(value_temp, pv);
+
         curr = curr->next;
         currVal = currVal->next;
     }
-    
-    printf("pdctCreate: %d points traités\n", count);
-    fflush(stdout);
-    
+
     size_t n = listSize(key_temp);
-    printf("pdctCreate: n=%zu\n", n);
-    fflush(stdout);
 
     Pair *pairs = malloc(n * sizeof(Pair));
     if (pairs == NULL) {
-        printf("pdctCreate: malloc pairs failed\n");
-        fflush(stdout);
         listFree(key_temp, true);
-        listFree(value_temp, false);
+        listFree(value_temp, true);
         free(pdct);
         return NULL;
     }
-    
+
     // Remplir le tableau
     LNode *knode = key_temp->head;
     LNode *vnode = value_temp->head;
@@ -215,27 +189,23 @@ PointDct* pdctCreate(List *lpoints, List *lvalues) {
         knode = knode->next;
         vnode = vnode->next;
     }
-    
+
     qsort(pairs, n, sizeof(Pair), compare_pair);
-    
+
     listFree(key_temp, true);
     listFree(value_temp, false);
-    
+
     key_temp = listNew();
     value_temp = listNew();
     if (key_temp == NULL || value_temp == NULL) {
-        printf("pdctCreate: new lists failed\n");
-        fflush(stdout);
         free(pairs);
         free(pdct);
         return NULL;
     }
-    
+
     for (size_t i = 0; i < n; i++) {
         uint64_t *kp = malloc(sizeof(uint64_t));
         if (kp == NULL) {
-            printf("pdctCreate: malloc kp failed\n");
-            fflush(stdout);
             free(pairs);
             listFree(key_temp, true);
             listFree(value_temp, false);
@@ -247,35 +217,27 @@ PointDct* pdctCreate(List *lpoints, List *lvalues) {
         listInsertLast(value_temp, pairs[i].value);
     }
     free(pairs);
-    
-    printf("pdctCreate: avant bstOptimalBuild, key_temp size=%zu, value_temp size=%zu\n", 
-           listSize(key_temp), listSize(value_temp));
-    fflush(stdout);
-    
+
     pdct->arbre = bstOptimalBuild(compare_uint64, key_temp, value_temp);
-    
-    printf("pdctCreate: apres bstOptimalBuild, arbre=%p\n", (void*)pdct->arbre);
-    fflush(stdout);
-    
+
+    listFree(key_temp, false);
+    listFree(value_temp, false);
+
     if (pdct->arbre == NULL) {
-        printf("pdctCreate: bstOptimalBuild a retourne NULL\n");
-        fflush(stdout);
-        listFree(key_temp, true);
-        listFree(value_temp, false);
         free(pdct);
         return NULL;
     }
-    
-    printf("pdctCreate: taille de l'arbre = %zu\n", bstSize(pdct->arbre));
-    fflush(stdout);
-    
+
     return pdct;
 }
 
 void pdctFree(PointDct *pd) {
     if (pd == NULL) return;
     if (pd->arbre != NULL) {
-        bstFree(pd->arbre, true, false);  
+        // freeKey=true libere les uint64_t* alloues dans pdctCreate.
+        // freeValue=true libere les PointValue* (mais ni le Point ni la
+        // valeur utilisateur qu'ils contiennent, qui appartiennent a l'appelant).
+        bstFree(pd->arbre, true, true);
     }
     free(pd);
 }
@@ -297,7 +259,7 @@ size_t pdctAverageNodeDepth(PointDct *pd) {
 
 void *pdctExactSearch(PointDct *pd, Point *p) {
     if (pd == NULL || pd->arbre == NULL || p == NULL) return NULL;
-    
+
     // Normaliser le point de la requête avec les mêmes bornes
     double x_norm, y_norm;
     if (pd->xmax == pd->xmin) {
@@ -310,73 +272,90 @@ void *pdctExactSearch(PointDct *pd, Point *p) {
     } else {
         y_norm = (ptGety(p) - pd->ymin) / (pd->ymax - pd->ymin);
     }
-    
+
     uint32_t x_morton = (uint32_t)(x_norm * (double)UINT32_MAX);
     uint32_t y_morton = (uint32_t)(y_norm * (double)UINT32_MAX);
     uint64_t z = zEncode(x_morton, y_morton);
-    
-    uint64_t key_temp = z;
-    return bstSearch(pd->arbre, &key_temp);
-}
 
-// Fonctions auxiliaires
-static int est_dans_cercle(double px, double py, double qx, double qy, double r) {
-    double dx = px - qx;
-    double dy = py - qy;
-    return (dx * dx + dy * dy) <= (r * r);
-}
+    // Plusieurs points peuvent avoir le meme code. 
+    // on prends tout les candidats puis on trouve celui qui correspond
+    List *candidats = bstRangeSearch(pd->arbre, &z, &z);
+    if (candidats == NULL) return NULL;
 
-// Convertit un code Morton (clé) en coordonnées (x, y) réelles
-static void decoder_morton(uint64_t code, double *x, double *y, 
-                           double xmin, double xmax, double ymin, double ymax) {
-    uint32_t x_code = 0, y_code = 0;
-    for (int i = 0; i < 32; i++) {
-        x_code |= ((code >> (2*i)) & 1) << i;
-        y_code |= ((code >> (2*i + 1)) & 1) << i;
-    }
-    
-    *x = xmin + (double)x_code / UINT32_MAX * (xmax - xmin);
-    *y = ymin + (double)y_code / UINT32_MAX * (ymax - ymin);
-}
-
-// Ajoute cette fonction avant pdctBallSearch
-static void parcours_infixe(BNode *noeud, PointDct *pd, double qx, double qy, double r, List *resultat) {
-    if (noeud == NULL) return;
-    
-    // Parcourir gauche
-    parcours_infixe(noeud->left, pd, qx, qy, r, resultat);
-    
-    // Traiter le nœud courant
-    if (noeud->key != NULL) {
-        uint64_t cle_morton = *(uint64_t*)noeud->key;
-        double x, y;
-        decoder_morton(cle_morton, &x, &y, 
-                      pd->xmin, pd->xmax, pd->ymin, pd->ymax);
-        
-        if (est_dans_cercle(x, y, qx, qy, r)) {
-            listInsertLast(resultat, noeud->value);
+    void *resultat = NULL;
+    for (LNode *n = candidats->head; n != NULL; n = n->next) {
+        PointValue *pv = (PointValue*)n->value;
+        if (ptCompare(pv->pt, p) == 0) {
+            resultat = pv->value;
+            break;
         }
     }
-    
-    // Parcourir droite
-    parcours_infixe(noeud->right, pd, qx, qy, r, resultat);
+
+    listFree(candidats, false);
+    return resultat;
 }
+
+static uint32_t normaliser_u32(double v, double vmin, double vmax) {
+
+    if (vmax == vmin)
+        return 0;
+
+    double norm = (v - vmin) / (vmax - vmin);
+
+    if (norm < 0.0) 
+        norm = 0.0;
+    if (norm > 1.0) 
+        norm = 1.0;
+
+    return (uint32_t)(norm * (double)UINT32_MAX);
+}
+
 List *pdctBallSearch(PointDct *pd, Point *q, double r) {
     if (pd == NULL || pd->arbre == NULL || q == NULL || r < 0) {
         return NULL;
     }
-    
+
     List *resultat = listNew();
     if (resultat == NULL) {
         return NULL;
     }
-    
+
     double qx = ptGetx(q);
     double qy = ptGety(q);
+
+    // carre qui englobe la boule
+    double xmin_b = qx - r;
+    double xmax_b = qx + r;
+    double ymin_b = qy - r;
+    double ymax_b = qy + r;
+
+    // Si la boule est entierement en dehors des donnees: renvoie une liste vide
+    if (xmax_b < pd->xmin || xmin_b > pd->xmax || ymax_b < pd->ymin || ymin_b > pd->ymax)
+        return resultat;
     
-    BST *arbre = (BST*)pd->arbre;
-    
-    parcours_infixe(((struct BST_t*)arbre)->root, pd, qx, qy, r, resultat);
-    
-    return resultat; // on retourne une liste vide si il n'y a pas d'élement 
+    // Normaliser et calculer les codes Morton des coins
+    uint32_t x_lo = normaliser_u32(xmin_b, pd->xmin, pd->xmax);
+    uint32_t x_hi = normaliser_u32(xmax_b, pd->xmin, pd->xmax);
+    uint32_t y_lo = normaliser_u32(ymin_b, pd->ymin, pd->ymax);
+    uint32_t y_hi = normaliser_u32(ymax_b, pd->ymin, pd->ymax);
+
+    uint64_t z_min = zEncode(x_lo, y_lo);
+    uint64_t z_max = zEncode(x_hi, y_hi);
+
+    List *candidats = bstRangeSearch(pd->arbre, &z_min, &z_max);
+    if (candidats == NULL) {
+        listFree(resultat, false);
+        return NULL;
+    }
+
+    double r2 = r * r;
+    for (LNode *n = candidats->head; n != NULL; n = n->next) {
+        PointValue *pv = (PointValue*)n->value;
+        if (ptSqrDistance(pv->pt, q) <= r2) {
+            listInsertLast(resultat, pv->value);
+        }
+    }
+
+    listFree(candidats, false);
+    return resultat;
 }
