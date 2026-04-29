@@ -36,12 +36,6 @@ typedef struct Pair_t
     size_t n;
 } Pair;
 
-typedef struct kvpair_t
-{
-    void *key;
-    void *value;
-} KVpair;
-
 /* Prototypes of static functions */
 
 static void bstFreeRec(BNode *n, bool freeKey, bool freeValue);
@@ -49,6 +43,9 @@ static BNode *bnNew(void *key, void *value);
 static size_t bstHeightRec(BNode *root);
 static BNode *bnMin(BNode *n);
 static BNode *successor(BNode *n);
+static double moyenne_prof(BNode *noeud, size_t profondeur_actuelle);
+
+/* Function implementations */
 
 BNode *bnNew(void *key, void *value)
 {
@@ -71,7 +68,7 @@ BST *bstNew(int comparison_fn_t(void *, void *))
     BST *bst = malloc(sizeof(BST));
     if (bst == NULL)
     {
-        fprintf(stderr, "bestNew: allocation error");
+        fprintf(stderr, "bstNew: allocation error");
         exit(1);
     }
     bst->root = NULL;
@@ -119,7 +116,9 @@ static size_t bstHeightRec(BNode *root)
 
 size_t bstHeight(BST *bst)
 {
-    return bstHeightRec(bst->root)-1;
+    if (bst->root == NULL)
+        return 0;
+    return bstHeightRec(bst->root) - 1;
 }
 
 bool bstInsert(BST *bst, void *key, void *value)
@@ -144,7 +143,7 @@ bool bstInsert(BST *bst, void *key, void *value)
         {
             n = n->left;
         }
-        else if (cmp > 0)
+        else
         {
             n = n->right;
         }
@@ -188,8 +187,10 @@ void *bstSearch(BST *bst, void *key)
     }
     return NULL;
 }
-/* static BNode *bnMin(BNode *n)
+
+static BNode *bnMin(BNode *n)
 {
+    if (n == NULL) return NULL;
     while (n->left != NULL)
         n = n->left;
     return n;
@@ -197,6 +198,7 @@ void *bstSearch(BST *bst, void *key)
 
 static BNode *successor(BNode *n)
 {
+    if (n == NULL) return NULL;
     if (n->right != NULL)
         return bnMin(n->right);
     BNode *y = n->parent;
@@ -207,116 +209,90 @@ static BNode *successor(BNode *n)
         y = y->parent;
     }
     return y;
- */
-
-// ----------------------------------------------------------------------------------
-// The functions below have to be implemented
+}
 
 BST *bstOptimalBuild(int comparison_fn_t(void *, void *), List *lkeys, List *lvalues)
 {
-    /*
-    architecture en arbre binaire de recherche dans la quelle c'est l'indice du millieu qui est la clé, ce qui nous permeet de trouver les indices de façon éfficace de part et d'autre de l'arbre
-     */ 
-    if (lkeys == NULL || listSize(lkeys) == 0) // si la liste existe mais que sa taille est nulle ça sert à rien 
-    return NULL;
+    if (lkeys == NULL || listSize(lkeys) == 0) {
+        return NULL;
+    }
 
-    size_t ind_milieu = listSize(lkeys)/2;
+    size_t ind_milieu = listSize(lkeys) / 2;
 
-
-    //partie gauche 
-
+    // Partie gauche
     List *lgauche_keys = listNew();
     List *lgauche_values = listNew();
 
-    LNode *courant_k = lkeys ->head; 
-    LNode *courant_v = lvalues ->head; 
+    LNode *courant_k = lkeys->head;
+    LNode *courant_v = lvalues->head;
 
-    for (size_t i =0 ; i<ind_milieu;i++){
-        listInsertLast(lgauche_keys,courant_k->value);
-        listInsertLast(lgauche_values,courant_v->value);
-        courant_k = courant_k -> next;
-        courant_v = courant_v -> next;
+    for (size_t i = 0; i < ind_milieu; i++) {
+        listInsertLast(lgauche_keys, courant_k->value);
+        listInsertLast(lgauche_values, courant_v->value);
+        courant_k = courant_k->next;
+        courant_v = courant_v->next;
     }
+    
     void *key = courant_k->value;
-    void *value =  courant_v->value; 
+    void *value = courant_v->value;
 
-    //partie droit
-
+    // Partie droite
     List *ldroite_keys = listNew();
     List *ldroite_values = listNew();
 
-    courant_k = courant_k ->next;
-    courant_v =  courant_v->next ;
+    courant_k = courant_k->next;
+    courant_v = courant_v->next;
 
-    for (size_t i =0 ; i<listSize(lkeys)-ind_milieu -1 ;i++){
-        listInsertLast(ldroite_keys,courant_k->value);
-        listInsertLast(ldroite_values,courant_v->value);
-        courant_k = courant_k -> next;
-        courant_v = courant_v -> next;
+    for (size_t i = 0; i < listSize(lkeys) - ind_milieu - 1; i++) {
+        listInsertLast(ldroite_keys, courant_k->value);
+        listInsertLast(ldroite_values, courant_v->value);
+        courant_k = courant_k->next;
+        courant_v = courant_v->next;
     }
 
+    // Créer le nœud racine
     BST *bst = bstNew(comparison_fn_t);
-    bstInsert(bst , key ,value);
-
-
-    //récursive
-
-    BST *gauche = bstOptimalBuild(comparison_fn_t , lgauche_keys , lgauche_values);
-    BST *droite = bstOptimalBuild(comparison_fn_t, ldroite_keys ,ldroite_values);
+    if (bst == NULL) {
+        listFree(lgauche_keys, false);
+        listFree(lgauche_values, false);
+        listFree(ldroite_keys, false);
+        listFree(ldroite_values, false);
+        return NULL;
+    }
     
-
-    if (gauche != NULL)
+    bstInsert(bst, key, value);
+    
+    // Récupérer les sous-arbres
+    BST *gauche = bstOptimalBuild(comparison_fn_t, lgauche_keys, lgauche_values);
+    BST *droite = bstOptimalBuild(comparison_fn_t, ldroite_keys, ldroite_values);
+    
+    // Connecter les sous-arbres
+    if (gauche != NULL && gauche->root != NULL) {
         bst->root->left = gauche->root;
-   
-    if(droite != NULL)
+        gauche->root->parent = bst->root;
+        bst->size += gauche->size;
+    }
+    
+    if (droite != NULL && droite->root != NULL) {
         bst->root->right = droite->root;
-
-    // on libère tout les listes qu'on a crée 
-
-    bstFree(gauche, false, false);
-    bstFree(droite, false, false);
+        droite->root->parent = bst->root;
+        bst->size += droite->size;
+    }
+    
+    // Libérer les structures BST mais pas les nœuds
+    if (gauche != NULL) {
+        free(gauche);
+    }
+    if (droite != NULL) {
+        free(droite);
+    }
+    
     listFree(lgauche_keys, false);
     listFree(lgauche_values, false);
     listFree(ldroite_keys, false);
     listFree(ldroite_values, false);
-
+    
     return bst;
-}
-static void rangeSearchRec(BNode *noeud, BST *bst, void *keymin, void *keymax, List *result)
-{
-    if (noeud == NULL)
-        return;
-
-    int compmin = bst->compfn(noeud->key, keymin); // on compare la clé à keymin
-    int compmax = bst->compfn(noeud->key, keymax); // même chose
-
-    if (compmin < 0)
-    {
-        rangeSearchRec(noeud->right, bst, keymin, keymax, result); // on va récursivement aller chercher du coté droit de l'arbre
-    }
-    else if (compmax > 0)
-    {
-        rangeSearchRec(noeud->left, bst, keymin, keymax, result); // on va récursivement aller chercher du coté gauche de l'arbre
-    }
-    else
-    { // on fait la même chose ici puisque l'on ne sais pas si les valeurs que l'on va chercher ici font automatiquement partie de la range 
-        rangeSearchRec(noeud->left, bst, keymin, keymax, result);
-        listInsertLast(result, noeud->value); // on met les valeurs que l'on a trouve dans la liste result 
-        rangeSearchRec(noeud->right, bst, keymin, keymax, result);
-    }
-}
-
-List *bstRangeSearch(BST *bst, void *keymin, void *keymax)
-{
-    if (bst == NULL)
-        return NULL;
-
-    List *result = listNew();
-    if (result == NULL)
-        return NULL;
-
-    rangeSearchRec(bst->root, bst, keymin, keymax, result);
-    return result;
 }
 
 static double moyenne_prof(BNode *noeud, size_t profondeur_actuelle)
@@ -330,34 +306,6 @@ static double moyenne_prof(BNode *noeud, size_t profondeur_actuelle)
     
     return somme;
 }
-/*
-
-ça prend la structure de parcours d'un noeud sur sa branche à gauche et à droite et enregistre la profondeur de ce noued et on ajoute au resultat finale de noeud le nombre de noeud qu'il y'a  
-static Pair moyenne_proff(BNode *noeud)
-{
-    if (noeud == NULL)
-        return (Pair){0, 0};
-    
-    Pair gauche = moyenne_proff(noeud->left);
-    Pair droite = moyenne_proff(noeud->right);
-    
-    Pair result;
-    result.n = gauche.n + droite.n + 1;
-    result.sum = gauche.sum + droite.sum + result.n - 1;
-    
-    return result;
-
-
-
-    double bstAverageNodeDepth(BST *bst)
-{
-    if (bst == NULL || bst->size == 0)
-        return 0.0;
-    Pair p = avgDepthRec2(bst->root);
-    return (double)p.sum / p.n;
-}
-}
-*/
 
 double bstAverageNodeDepth(BST *bst)
 {
