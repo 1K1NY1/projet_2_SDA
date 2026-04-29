@@ -16,7 +16,7 @@ typedef struct BNode_t {
     void *value;
 } BNode;
 
-// Définir la structure de l'arbre comme elle est dans BST.c
+// Définir la structure de l'arbre comme dans BST.c
 typedef struct BST_t {
     BNode *root;
     size_t size;
@@ -192,7 +192,6 @@ PointDct* pdctCreate(List *lpoints, List *lvalues) {
     printf("pdctCreate: %d points traités\n", count);
     fflush(stdout);
     
-    // ========== PARTIE MANQUANTE ==========
     size_t n = listSize(key_temp);
     printf("pdctCreate: n=%zu\n", n);
     fflush(stdout);
@@ -253,7 +252,6 @@ PointDct* pdctCreate(List *lpoints, List *lvalues) {
            listSize(key_temp), listSize(value_temp));
     fflush(stdout);
     
-    // CONSTRUIRE l'arbre optimal
     pdct->arbre = bstOptimalBuild(compare_uint64, key_temp, value_temp);
     
     printf("pdctCreate: apres bstOptimalBuild, arbre=%p\n", (void*)pdct->arbre);
@@ -277,7 +275,7 @@ PointDct* pdctCreate(List *lpoints, List *lvalues) {
 void pdctFree(PointDct *pd) {
     if (pd == NULL) return;
     if (pd->arbre != NULL) {
-        bstFree(pd->arbre, true, false);  // true = libérer les clés (uint64_t*), false = ne pas libérer les valeurs
+        bstFree(pd->arbre, true, false);  
     }
     free(pd);
 }
@@ -320,34 +318,6 @@ void *pdctExactSearch(PointDct *pd, Point *p) {
     uint64_t key_temp = z;
     return bstSearch(pd->arbre, &key_temp);
 }
-
-/*// Fonction pour obtenir le minimum de l'arbre
-static BNode* bst_min(BNode *n) {
-    if (n == NULL) return NULL;
-    while (n->left != NULL)
-        n = n->left;
-    return n;
-}
-
-// Fonction pour obtenir le successeur
-static BNode* bst_successor(BNode *n) {
-    if (n == NULL) return NULL;
-    if (n->right != NULL) {
-        BNode *curr = n->right;
-        while (curr->left != NULL)
-            curr = curr->left;
-        return curr;
-    }
-    BNode *y = n->parent;
-    BNode *x = n;
-    while (y != NULL && x == y->right) {
-        x = y;
-        y = y->parent;
-    }
-    return y;
-}
-*/
-
 
 // Fonctions auxiliaires
 static int est_dans_cercle(double px, double py, double qx, double qy, double r) {
@@ -408,5 +378,5 @@ List *pdctBallSearch(PointDct *pd, Point *q, double r) {
     
     parcours_infixe(((struct BST_t*)arbre)->root, pd, qx, qy, r, resultat);
     
-    return resultat;
+    return resultat; // on retourne une liste vide si il n'y a pas d'élement 
 }
