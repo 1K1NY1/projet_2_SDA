@@ -23,10 +23,10 @@ typedef struct
     size_t size;
 }BST2d;
 
-typedef struct PointDct_t {
+struct PointDct_t {
     BST2d* tree;
     size_t nbOfPoints;
-} PointDct;
+};
 
 typedef struct //structure pour optimiser la recherche.
 {
@@ -131,10 +131,6 @@ static void bst2dFreeRec(BNode2d *n, bool freeKey, bool freeValue)
     free(n);
 }
 
-static size_t bst2dSize(BST2d *bst)
-{
-    return bst->size;
-}
 
 static size_t bst2dHeightRec(BNode2d *root)
 {
@@ -386,7 +382,7 @@ PointDct *pdctCreate(List *lpoints, List *Lvalues)
     //libère les arrays
     freeArray(listX);
     freeArray(listY);
-    freeArray(arrayLPoint);
+    free(arrayLPoint);
     free(status);
     return pd;
 }
@@ -461,7 +457,7 @@ static void sort(ListPoint** tableau, size_t length, bool Xsort,
     QuickSort(tableau,0,length-1, Xsort,compare,swap);
 }
 
-
+/*Non utilisé
 //Insere a gauche ou a droite du noeud n
 static bool bst2dInsert(BST2d* tree, BNode2d* n, bool left , void *key, void *value)
 {
@@ -483,6 +479,7 @@ static bool bst2dInsert(BST2d* tree, BNode2d* n, bool left , void *key, void *va
     
     return true;
 }
+*/
 
 /*
 Construit la structure PointDct de maniere optimale (recursion)
@@ -528,8 +525,6 @@ static BNode2d* createBst2dRec(BST2d* tree, BNode2d* previousNode,Array* splitLi
 
     //Separe en deux
     size_t size = splitList->length;
-    size_t i = 0;
-    
 
     Array* splitListLeft = newArrayFromArray(0,size/2-1,splitList, status);
     if(!splitListLeft)
