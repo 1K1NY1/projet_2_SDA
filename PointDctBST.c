@@ -2,6 +2,7 @@
 #include "PointDct.h"
 #include "Point.h"  
 #include <stdlib.h>
+#include <math.h>
 #include <stdint.h>
 
 typedef struct {
@@ -237,48 +238,67 @@ void *pdctExactSearch(PointDct *pd, Point *p) {
     return bstSearch(pd->arbre, &key_temp);
 }
 
+
+
+static int est_dans_cercle(double px, double py, double qx, double qy, double r) {
+    double dx = px - qx;
+    double dy = py - qy;
+    return (dx * dx + dy * dy) <= (r * r);
+}
+
+// Convertit un code Morton (clé) en coordonnées (x, y) réelles
+static void decoder_morton(uint64_t code, double *x, double *y, 
+                           double xmin, double xmax, double ymin, double ymax) {
+    //extraire X et Y du code Morton (32 bits chacun)
+    uint32_t x_code = 0, y_code = 0;
+    for (int i = 0; i < 32; i++) {
+        x_code |= ((code >> (2*i)) & 1) << i;
+        y_code |= ((code >> (2*i + 1)) & 1) << i;
+    }
+    
+    // convertir en coordonnées réelles
+    *x = xmin + (double)x_code / UINT32_MAX * (xmax - xmin);
+    *y = ymin + (double)y_code / UINT32_MAX * (ymax - ymin);
+}
+
 List *pdctBallSearch(PointDct *pd, Point *q, double r) {
+
     if (pd == NULL || pd->arbre == NULL || q == NULL || r < 0) {
         return NULL;
     }
     
-    List *result = listNew();
-    if (result == NULL) {
+    List *resultat = listNew();
+    if (resultat == NULL) {
         return NULL;
     }
     
-    // Parcourir TOUS les points via un parcours infixe de l'arbre
-    BST_t *node = bstMin(pd->arbre);
-    while (node != NULL) {
-        // Décoder la clé Morton pour obtenir les coordonnées normalisées
-        uint64_t key = *(uint64_t*)node->key;
+    double qx = ptGetx(q);
+    double qy = ptGety(q);
+    
+    BSTNode *noeud = bstMin(pd->arbre);
+    
+    while (noeud != NULL) {
+        // Lire la clé Morton du nœud
+        uint64_t cle_morton = *(uint64_t*)noeud->key;
         
-        // Extraction simple de X et Y du code Morton
-        uint32_t x = 0, y = 0;
-        for (int i = 0; i < 32; i++) {
-            x |= ((key >> (2*i)) & 1) << i;
-            y |= ((key >> (2*i + 1)) & 1) << i;
+        // Convertir la clé en coordonnées réelles (x, y)
+        double x, y;
+        decoder_morton(cle_morton, &x, &y, 
+                      pd->xmin, pd->xmax, pd->ymin, pd->ymax);
+        
+        // Vérifier si le point (x, y) est dans le cercle
+        if (est_dans_cercle(x, y, qx, qy, r)) {
+            // Si oui, ajouter la valeur associée à la liste des résultats
+            listInsertLast(resultat, noeud->value);
         }
         
-        // Reconvertir en coordonnées réelles
-        double x_real = pd->xmin + (double)x / (double)UINT32_MAX * (pd->xmax - pd->xmin);
-        double y_real = pd->ymin + (double)y / (double)UINT32_MAX * (pd->ymax - pd->ymin);
-        
-        // Vérifier si le point est dans le cercle
-        double dx = x_real - ptGetx(q);
-        double dy = y_real - ptGety(q);
-        
-        if (dx*dx + dy*dy <= r*r) {
-            listInsertLast(result, node->value);
-        }
-        
-        node = bstSuccessor(pd->arbre, node->key);
+        noeud = bstSuccessor(pd->arbre, noeud->key);
     }
     
-    if (listSize(result) == 0) {
-        listFree(result, false);
+    if (listSize(resultat) == 0) {
+        listFree(resultat, false);
         return NULL;
     }
     
-    return result;
+    return resultat;
 }
