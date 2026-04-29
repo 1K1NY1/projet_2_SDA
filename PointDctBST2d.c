@@ -5,7 +5,7 @@
 #include "Point.h"
 #include "PointDct.h"
 
-//Code pour arbre de recherche 2d (tout devra être static à terme)
+//structures
 typedef struct BNode2d_t BNode2d;
 struct BNode2d_t {
 
@@ -26,9 +26,61 @@ typedef struct
 typedef struct PointDct_t {
     BST2d* tree;
     size_t nbOfPoints;
-    List* ListPoint;
-    List* ListValue;
 } PointDct;
+
+typedef struct //structure pour optimiser la recherche.
+{
+    Point* point;
+    void* value;
+    size_t index; //position dans le tableau de status
+}ListPoint;
+
+//Type array
+typedef struct
+{
+    ListPoint** list;
+    size_t length;
+}Array;
+
+
+//declarations
+static BNode2d *bn2dNew(void *key, void *value, size_t profondeur);
+static BST2d *bst2dNew();
+static void bst2dFree(BST2d *bst, bool freeKey, bool freeValue);
+static void bst2dFreeRec(BNode2d *n, bool freeKey, bool freeValue);
+static size_t bst2dSize(BST2d *bst);
+static size_t bst2dHeightRec(BNode2d *root);
+static size_t bst2dHeight(BST2d *bst);
+static int compareBST2d(Point* key1, Point* key2, size_t profondeur);
+static int compareForX(Point* key1, Point* key2);
+static int compareForY(Point* key1, Point* key2);
+static void *bst2dSearch(BST2d *bst, void *key);
+static size_t sumOfDepthRec(BNode2d* n);
+
+static Array* newArrayFromArray(size_t start, size_t end, Array* arr, Array** status);
+static Array* newArrayAs(Array* arr);
+static Array* newArrayFromListPoint(ListPoint** list, size_t length, bool update, Array** status);
+static void freeArray(Array* arr);
+
+static int compareByIndex(ListPoint** tab, size_t i, size_t j, bool Xsort);
+static void swap(ListPoint** tab, size_t i, size_t j);
+static size_t partition(ListPoint** tab, size_t p, size_t r, bool Xsort,
+                        int (*compare)(ListPoint**, size_t i, size_t j, bool),
+                        void (*swap)(ListPoint** tableau, size_t i, size_t j));
+static void QuickSort( ListPoint** tab, size_t p , size_t r,bool Xsort,
+                int (*compare)(ListPoint**, size_t i, size_t j, bool Xsort),
+                void (*swap)(ListPoint** tableau, size_t i, size_t j));
+static void sort(ListPoint** tableau, size_t length, bool Xsort,
+          int (*compare)(ListPoint**, size_t i, size_t j, bool Xsort),
+          void (*swap)(ListPoint** tableau, size_t i, size_t j));
+
+static bool bst2dInsert(BST2d* tree, BNode2d* n, bool left , void *key, void *value);
+static BNode2d* createBst2dRec(BST2d* tree, BNode2d* previousNode,Array* splitList, Array* otherList, Array** status, size_t profondeur);
+static bool ballSearchRec(List* result, BNode2d* n, Point *p, double r);
+
+
+//Code pour arbre de recherche 2d (tout devra être static à terme)
+
 
 static BNode2d *bn2dNew(void *key, void *value, size_t profondeur)
 {
@@ -157,37 +209,19 @@ static void *bst2dSearch(BST2d *bst, void *key)
     }
     return NULL;
 }
-static size_t sumOfDepth(BST2d* bst)
-{
-    if(!bst || !bst->root)
-        return 0;
-    return (sumOfDepthRec(bst->root->left) + sumOfDepthRec(bst->root->right));
-}
 
 static size_t sumOfDepthRec(BNode2d* n)
 {
     if(!n)
         return 0;
-    return sumOfDepth(n->left) + sumOfDepth(n->right) + n->profondeur;
+    return sumOfDepthRec(n->left) + sumOfDepthRec(n->right) + n->profondeur;
 }
 
 //Code pour PointDct
-typedef struct //structure pour optimiser la recherche.
-{
-    Point* point;
-    void* value;
-    size_t index; //position dans le tableau de status
-}ListPoint;
 
-//Type array
-typedef struct
-{
-    ListPoint** list;
-    size_t length;
-}Array;
 
 //Copie un array à partir d'un autre (de start à end compris), mets à jour statut
-Array* newArrayFromArray(size_t start, size_t end, Array* arr, Array** status)
+static Array* newArrayFromArray(size_t start, size_t end, Array* arr, Array** status)
 {
     Array* res = malloc(sizeof(Array));
     if(!res)
@@ -213,7 +247,7 @@ Array* newArrayFromArray(size_t start, size_t end, Array* arr, Array** status)
 }
 
 //cree un array de meme taille que arr
-Array* newArrayAs(Array* arr)
+static Array* newArrayAs(Array* arr)
 {
     size_t size = arr->length;
     Array* res = malloc(sizeof(Array));
@@ -233,7 +267,7 @@ Array* newArrayAs(Array* arr)
     return res;
 }
 //cree un array de taille length à partir d'une liste de ListPoint
-Array* newArrayFromListPoint(ListPoint** list, size_t length, bool update, Array** status)
+static Array* newArrayFromListPoint(ListPoint** list, size_t length, bool update, Array** status)
 {
     Array* res = malloc(sizeof(Array));
     if(!res)
@@ -257,7 +291,7 @@ Array* newArrayFromListPoint(ListPoint** list, size_t length, bool update, Array
     res->length = length;
     return res;
 }
-void freeArray(Array* arr)
+static void freeArray(Array* arr)
 {
     free(arr->list);
     free(arr);
@@ -268,7 +302,7 @@ PointDct *pdctCreate(List *lpoints, List *Lvalues)
 {
     //On crée deux listes liées triées selon x et y. On crée des listes de plus en plus petite en séparant la liste
     //Stockage du status des éléments
-    Array** status = malloc(sizeof(List*)*listSize(lpoints));
+    Array** status = malloc(sizeof(Array*)*listSize(lpoints));
     if(!status)
     {
         fprintf(stderr, "erreur de malloc: status");
@@ -342,9 +376,7 @@ PointDct *pdctCreate(List *lpoints, List *Lvalues)
     }
     emptyTree->root = root;
     pd->tree = emptyTree;
-    pd->nbOfPoints = emptyTree->size;
-    pd->ListPoint = lpoints;
-    pd->ListValue = Lvalues;
+    pd->nbOfPoints = nbOfPoints;
     //Les noeuds de la liste sont vides
     //Libère les listPoints
     for(size_t ind = 0; ind < nbOfPoints; ind++)
@@ -355,10 +387,11 @@ PointDct *pdctCreate(List *lpoints, List *Lvalues)
     freeArray(listX);
     freeArray(listY);
     freeArray(arrayLPoint);
+    free(status);
     return pd;
 }
 //QuickSort
-int compareByIndex(ListPoint** tab, size_t i, size_t j, bool Xsort)
+static int compareByIndex(ListPoint** tab, size_t i, size_t j, bool Xsort)
 {
     double c1;
     double c2;
@@ -378,7 +411,7 @@ int compareByIndex(ListPoint** tab, size_t i, size_t j, bool Xsort)
         return -1;
     return 0;
 }
-void swap(ListPoint** tab, size_t i, size_t j)
+static void swap(ListPoint** tab, size_t i, size_t j)
 {
     ListPoint* temp = tab[i];
     tab[i] = tab[j];
@@ -460,6 +493,7 @@ static BNode2d* createBst2dRec(BST2d* tree, BNode2d* previousNode,Array* splitLi
     if(splitList->length == 1)
     {
         BNode2d* node = bn2dNew(splitList->list[0]->point,splitList->list[0]->value,profondeur);
+        tree->size++;
         node->parent = previousNode;
         node->left = NULL;
         node->right = NULL;
@@ -469,8 +503,8 @@ static BNode2d* createBst2dRec(BST2d* tree, BNode2d* previousNode,Array* splitLi
     }
     if(splitList->length == 2)
     {
-        // a securiser si necessaire
         BNode2d* node = bn2dNew(splitList->list[1]->point,splitList->list[1]->value,profondeur);
+        tree->size++;
         node->parent = previousNode;
         node->left = bn2dNew(splitList->list[0]->point,splitList->list[0]->value,profondeur + 1);
         node->right = NULL;
@@ -482,6 +516,7 @@ static BNode2d* createBst2dRec(BST2d* tree, BNode2d* previousNode,Array* splitLi
     if(splitList->length == 3)
     {
         BNode2d* node = bn2dNew(splitList->list[1]->point,splitList->list[1]->value,profondeur);
+        tree->size++;
         node->parent = previousNode;
         node->left = bn2dNew(splitList->list[0]->point,splitList->list[0]->value,profondeur + 1);
         node->right = bn2dNew(splitList->list[2]->point,splitList->list[2]->value,profondeur + 1);
@@ -513,7 +548,7 @@ static BNode2d* createBst2dRec(BST2d* tree, BNode2d* previousNode,Array* splitLi
         fprintf(stderr,"echec de creation de liste");
         return NULL;
     } 
-    List* otherList2 = newArrayAs(splitListRight);
+    Array* otherList2 = newArrayAs(splitListRight);
     if(!otherList2)
     {
         fprintf(stderr,"echec de creation de liste");
@@ -522,7 +557,7 @@ static BNode2d* createBst2dRec(BST2d* tree, BNode2d* previousNode,Array* splitLi
     
     //remplis otherList1 et otherList2;
 
-    for(size_t x,y,j = 0; j < otherList->length; j++) 
+    for(size_t x = 0, y = 0, j = 0; j < otherList->length; j++) 
     {
         if(status[otherList->list[j]->index] == splitListLeft) //le noeud m est dans la nouvelle liste gauche
         {
@@ -530,17 +565,18 @@ static BNode2d* createBst2dRec(BST2d* tree, BNode2d* previousNode,Array* splitLi
         }
         else if(status[otherList->list[j]->index] == splitListRight) //evite n
         {
-            otherList1->list[y++] = otherList->list[j];
+            otherList2->list[y++] = otherList->list[j];
         }
     } 
 
     //On libère les Array précédent car des copies en ont été faites (aucun code ne l'utilise a nouveau)
     freeArray(splitList);
-    free(otherList);
+    freeArray(otherList);
     //Recursion
     //On insere n dans l'arbre
     //Inverse le tableau qui est coupe a chaque nouvelle recursion x->y->x->y...
     BNode2d* node = bn2dNew(n->point,n->value,profondeur);
+    tree->size++;
     node->parent = previousNode;
     node->left = createBst2dRec(tree,node,otherList1,splitListLeft,status,profondeur + 1);
     node->right = createBst2dRec(tree,node,otherList2,splitListRight, status, profondeur + 1);
@@ -566,9 +602,9 @@ size_t pdctSize(PointDct *pd)
 }
 size_t pdctAverageNodeDepth(PointDct *pd)
 {
-    if(!pd)
+    if(!pd || pd->nbOfPoints == 0)
         return 0;
-    size_t sum = sumOfDepth(pd->tree);
+    size_t sum = sumOfDepthRec(pd->tree);
     size_t average = sum/pd->nbOfPoints;
     return average;
 }
@@ -592,17 +628,16 @@ List *pdctBallSearch(PointDct *pd, Point *p, double r)
     return result;
 }
 
-bool ballSearchRec(List* result, BNode2d* n, Point *p, double r)
+static bool ballSearchRec(List* result, BNode2d* n, Point *p, double r)
 {
     if(!n)
-        return;
+        return true;
     
     size_t profondeur = n->profondeur;
     if(ptSqrDistance(n->key,p) <= r*r) //le point fait partie de la boule
     {
-        if(!listInsertLast(result,n->key)) //ajoute la position a la liste
+        if(!listInsertLast(result,n->value)) //ajoute la valeur a la liste
             return false;
-        return true;
     }
     //choix du parcours
     double v_n, v_p;
