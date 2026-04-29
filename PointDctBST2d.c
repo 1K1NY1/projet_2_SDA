@@ -48,7 +48,6 @@ static BNode2d *bn2dNew(void *key, void *value, size_t profondeur);
 static BST2d *bst2dNew();
 static void bst2dFree(BST2d *bst, bool freeKey, bool freeValue);
 static void bst2dFreeRec(BNode2d *n, bool freeKey, bool freeValue);
-static size_t bst2dSize(BST2d *bst);
 static size_t bst2dHeightRec(BNode2d *root);
 static size_t bst2dHeight(BST2d *bst);
 static int compareBST2d(Point* key1, Point* key2, size_t profondeur);
@@ -74,7 +73,6 @@ static void sort(ListPoint** tableau, size_t length, bool Xsort,
           int (*compare)(ListPoint**, size_t i, size_t j, bool Xsort),
           void (*swap)(ListPoint** tableau, size_t i, size_t j));
 
-static bool bst2dInsert(BST2d* tree, BNode2d* n, bool left , void *key, void *value);
 static BNode2d* createBst2dRec(BST2d* tree, BNode2d* previousNode,Array* splitList, Array* otherList, Array** status, size_t profondeur);
 static bool ballSearchRec(List* result, BNode2d* n, Point *p, double r);
 
@@ -296,6 +294,16 @@ static void freeArray(Array* arr)
 
 PointDct *pdctCreate(List *lpoints, List *Lvalues)
 {
+    if(!lpoints || !Lvalues)
+    {
+        fprintf(stderr, "pointeur nuls en arguments");
+        return NULL;
+    }
+    if(listSize(lpoints) == 0)
+    {
+        fprintf(stderr, "liste de points vide");
+        return NULL;
+    }
     //On crée deux listes liées triées selon x et y. On crée des listes de plus en plus petite en séparant la liste
     //Stockage du status des éléments
     Array** status = malloc(sizeof(Array*)*listSize(lpoints));
@@ -311,6 +319,7 @@ PointDct *pdctCreate(List *lpoints, List *Lvalues)
         fprintf(stderr, "liste de points et de valeurs de taille differentes");
         return NULL;
     }
+    
     ListPoint** arrayLPoint = malloc(sizeof(ListPoint*)*nbOfPoints);
     if(!arrayLPoint)
     {
@@ -380,8 +389,6 @@ PointDct *pdctCreate(List *lpoints, List *Lvalues)
         free(arrayLPoint[ind]);
     }
     //libère les arrays
-    freeArray(listX);
-    freeArray(listY);
     free(arrayLPoint);
     free(status);
     return pd;
@@ -457,32 +464,11 @@ static void sort(ListPoint** tableau, size_t length, bool Xsort,
     QuickSort(tableau,0,length-1, Xsort,compare,swap);
 }
 
-/*Non utilisé
-//Insere a gauche ou a droite du noeud n
-static bool bst2dInsert(BST2d* tree, BNode2d* n, bool left , void *key, void *value)
-{
-    BNode2d *new = bn2dNew(key, value, n->profondeur + 1);
-    if (new == NULL)
-    {
-        return false;
-    }
-
-    if(left == true)
-    {
-        n->left = new;
-    }
-    else
-    {
-        n->right = new;
-    }
-    tree->size++;
-    
-    return true;
-}
-*/
 
 /*
 Construit la structure PointDct de maniere optimale (recursion)
+La fonction coupe une liste en deux puis recree deux nouvelles liste pour l'autre liste
+chaque liste est toujours triee dans l'ordre
 */
 static BNode2d* createBst2dRec(BST2d* tree, BNode2d* previousNode,Array* splitList, Array* otherList, Array** status, size_t profondeur)
 {
@@ -504,6 +490,7 @@ static BNode2d* createBst2dRec(BST2d* tree, BNode2d* previousNode,Array* splitLi
         
         node->parent = previousNode;
         node->left = bn2dNew(splitList->list[0]->point,splitList->list[0]->value,profondeur + 1);
+        node->left->parent = node;
         node->right = NULL;
         tree->size += 2;
         freeArray(splitList);
@@ -515,7 +502,9 @@ static BNode2d* createBst2dRec(BST2d* tree, BNode2d* previousNode,Array* splitLi
         BNode2d* node = bn2dNew(splitList->list[1]->point,splitList->list[1]->value,profondeur);
         node->parent = previousNode;
         node->left = bn2dNew(splitList->list[0]->point,splitList->list[0]->value,profondeur + 1);
+        node->left->parent = node;
         node->right = bn2dNew(splitList->list[2]->point,splitList->list[2]->value,profondeur + 1);
+        node->right->parent = node;
         tree->size += 3;
         freeArray(splitList);
         freeArray(otherList);
@@ -598,7 +587,7 @@ size_t pdctAverageNodeDepth(PointDct *pd)
 {
     if(!pd || pd->nbOfPoints == 0)
         return 0;
-    size_t sum = sumOfDepthRec(pd->tree);
+    size_t sum = sumOfDepthRec(pd->tree->root);
     size_t average = sum/pd->nbOfPoints;
     return average;
 }
