@@ -501,11 +501,11 @@ static BNode2d* createBst2dRec(BST2d* tree, BNode2d* previousNode,Array* splitLi
     if(splitList->length == 2)
     {
         BNode2d* node = bn2dNew(splitList->list[1]->point,splitList->list[1]->value,profondeur);
-        tree->size++;
+        
         node->parent = previousNode;
         node->left = bn2dNew(splitList->list[0]->point,splitList->list[0]->value,profondeur + 1);
         node->right = NULL;
-
+        tree->size += 2;
         freeArray(splitList);
         freeArray(otherList);
         return node;
@@ -513,11 +513,10 @@ static BNode2d* createBst2dRec(BST2d* tree, BNode2d* previousNode,Array* splitLi
     if(splitList->length == 3)
     {
         BNode2d* node = bn2dNew(splitList->list[1]->point,splitList->list[1]->value,profondeur);
-        tree->size++;
         node->parent = previousNode;
         node->left = bn2dNew(splitList->list[0]->point,splitList->list[0]->value,profondeur + 1);
         node->right = bn2dNew(splitList->list[2]->point,splitList->list[2]->value,profondeur + 1);
-
+        tree->size += 3;
         freeArray(splitList);
         freeArray(otherList);
         return node;
