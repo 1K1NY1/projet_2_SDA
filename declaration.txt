@@ -20,7 +20,7 @@ Prénom: Simon
 Contribution au projet: 50 %
 
 Etudiant 2: (laissez vide si vous avez fait le projet seul)
-Matricule: ...
-Nom: ...
-Prénom: ...
-Contribution au projet: ... %
+Matricule: s2406718
+Nom: Wandege
+Prénom: joel
+Contribution au projet: 50 %
