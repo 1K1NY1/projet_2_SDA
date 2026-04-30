@@ -14,10 +14,10 @@ Informations etudiants:
 =======================
 
 Etudiant 1:
-Matricule: ...
-Nom: ...
-Prénom: ...
-Contribution au projet: ... %
+Matricule: s2401901
+Nom: Schneider
+Prénom: Simon
+Contribution au projet: 50 %
 
 Etudiant 2: (laissez vide si vous avez fait le projet seul)
 Matricule: ...
